@@ -1,0 +1,19 @@
+# Fichiers produits par Maven
+target/
+dependency-reduced-pom.xml
+
+# Captures de démonstration pouvant contenir des noms ou données de test
+pic/
+
+# Configuration locale et secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Fichiers propres à l'éditeur ou au système
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
