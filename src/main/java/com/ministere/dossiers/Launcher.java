@@ -12,6 +12,7 @@ import javafx.scene.control.PasswordField;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.image.Image;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -47,6 +48,8 @@ public class Launcher extends Application {
     @Override
     public void start(Stage primaryStage) {
         primaryStage.setTitle("Système de Gestion PRMP");
+        // Charge l'icône depuis les ressources pour qu'elle fonctionne aussi depuis le JAR.
+        primaryStage.getIcons().add(new Image(getClass().getResourceAsStream("/ic_1.png")));
         mainContainer = new VBox(15);
         mainContainer.setPadding(new Insets(20));
         mainContainer.getStyleClass().add("app-root");
@@ -57,8 +60,104 @@ public class Launcher extends Application {
         Scene scene = new Scene(scrollPane, 800, 650);
         scene.getStylesheets().add(getClass().getResource("/app.css").toExternalForm());
         primaryStage.setScene(scene);
-        showLoginScreen(primaryStage);
+        if (AppConfig.hasExternalCredentials()) {
+            showLoginScreen(primaryStage);
+        } else {
+            try {
+                if (CredentialVault.isConfigured()) {
+                    showLoginScreen(primaryStage);
+                } else {
+                    showCredentialSetup();
+                }
+            } catch (IllegalStateException e) {
+                showCredentialSetup(e.getMessage());
+            }
+        }
         primaryStage.show();
+    }
+
+    /** Demande une première fois les secrets et les conserve dans le coffre du système. */
+    private void showCredentialSetup() {
+        showCredentialSetup(null);
+    }
+
+    private void showCredentialSetup(String configurationError) {
+        mainContainer.getChildren().clear();
+        mainContainer.setAlignment(Pos.CENTER);
+        mainContainer.setPadding(new Insets(32));
+
+        Label brandIcon = new Label("P");
+        brandIcon.getStyleClass().add("brand-mark");
+        Label title = new Label("Configuration initiale");
+        title.getStyleClass().add("login-title");
+        Label description = new Label(
+                "Saisissez les mots de passe de service. Ils seront conservés dans le coffre sécurisé de votre session.");
+        description.setWrapText(true);
+        description.getStyleClass().add("login-subtitle");
+
+        PasswordField ldapPassword = new PasswordField();
+        ldapPassword.setPromptText("Mot de passe du compte de service LDAP");
+        PasswordField confirmLdapPassword = new PasswordField();
+        confirmLdapPassword.setPromptText("Confirmer le mot de passe LDAP");
+        PasswordField databasePassword = new PasswordField();
+        databasePassword.setPromptText("Mot de passe du compte MariaDB");
+        PasswordField confirmDatabasePassword = new PasswordField();
+        confirmDatabasePassword.setPromptText("Confirmer le mot de passe MariaDB");
+
+        Label status = new Label(configurationError == null ? "" : configurationError);
+        status.setWrapText(true);
+        status.getStyleClass().add("login-status");
+
+        Button saveButton = new Button("Enregistrer et continuer");
+        saveButton.getStyleClass().addAll("button", "button-primary", "login-button");
+        saveButton.setOnAction(event -> {
+            String ldapSecret = ldapPassword.getText();
+            String databaseSecret = databasePassword.getText();
+            if (ldapSecret.isBlank() || databaseSecret.isBlank()) {
+                status.setText("Renseignez les deux mots de passe.");
+                return;
+            }
+            if (!ldapSecret.equals(confirmLdapPassword.getText())
+                    || !databaseSecret.equals(confirmDatabasePassword.getText())) {
+                status.setText("Les confirmations ne correspondent pas aux mots de passe.");
+                return;
+            }
+
+            saveButton.setDisable(true);
+            status.setText("Enregistrement dans le coffre système…");
+            try {
+                CredentialVault.save(ldapSecret, databaseSecret);
+                ldapPassword.clear();
+                confirmLdapPassword.clear();
+                databasePassword.clear();
+                confirmDatabasePassword.clear();
+                showLoginScreen((Stage) mainContainer.getScene().getWindow());
+            } catch (IllegalStateException e) {
+                status.setText(e.getMessage());
+            } finally {
+                saveButton.setDisable(false);
+            }
+        });
+
+        VBox card = new VBox(12,
+                brandIcon,
+                title,
+                description,
+                fieldLabel("Mot de passe LDAP"),
+                ldapPassword,
+                confirmLdapPassword,
+                fieldLabel("Mot de passe MariaDB"),
+                databasePassword,
+                confirmDatabasePassword,
+                saveButton,
+                status);
+        card.getStyleClass().add("login-card");
+        card.setMaxWidth(500);
+        StackPane centeredCard = new StackPane(card);
+        centeredCard.setAlignment(Pos.CENTER);
+        centeredCard.setMinHeight(560);
+        VBox.setVgrow(centeredCard, Priority.ALWAYS);
+        mainContainer.getChildren().add(centeredCard);
     }
 
     /** Construit l'écran de connexion et traite l'authentification LDAP. */
@@ -440,6 +539,13 @@ public class Launcher extends Application {
         HBox.setHgrow(field, Priority.ALWAYS);
         input.setAccessibleText(accessibleText);
         return input;
+    }
+
+    /** Crée un libellé de formulaire avec le style commun de l'écran de connexion. */
+    private static Label fieldLabel(String text) {
+        Label label = new Label(text);
+        label.getStyleClass().add("field-label");
+        return label;
     }
 
     /** Crée une icône vectorielle JavaFX, sans fichier image externe. */

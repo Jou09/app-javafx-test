@@ -1,0 +1,47 @@
+name: Paquet Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - name: Récupérer les sources
+        uses: actions/checkout@v4
+
+      - name: Installer Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Installer WiX Toolset 3
+        shell: pwsh
+        run: |
+          if (-not (Get-Command candle.exe -ErrorAction SilentlyContinue)) {
+            choco install wixtoolset --version=3.14.1 --yes --no-progress
+            $wixBin = "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin"
+            if (-not (Test-Path "$wixBin\candle.exe")) {
+              throw "WiX Toolset n'a pas été installé à l'emplacement attendu."
+            }
+            Add-Content -Path $env:GITHUB_PATH -Value $wixBin
+          }
+
+      - name: Construire l'installateur EXE
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
+
+      - name: Publier l'installateur comme artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-javafx-test-windows
+          path: target/dist/windows/*.exe
+          if-no-files-found: error
+          retention-days: 30

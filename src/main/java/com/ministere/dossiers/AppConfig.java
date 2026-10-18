@@ -45,9 +45,9 @@ final class AppConfig {
         return value("app.ldap.bind-dn", "LDAP_BIND_DN", "cn=admin," + ldapBaseDn());
     }
 
-    /** Lit le mot de passe du compte de service LDAP, obligatoire pour les recherches. */
+    /** Lit le mot de passe LDAP depuis les paramètres externes ou le coffre système. */
     static String ldapBindPassword() {
-        return required("app.ldap.bind-password", "LDAP_BIND_PASSWORD");
+        return secret("app.ldap.bind-password", "LDAP_BIND_PASSWORD", CredentialVault.ldapAccount());
     }
 
     /** Retourne l'URL JDBC de MariaDB. */
@@ -61,25 +61,35 @@ final class AppConfig {
         return value("app.db.user", "DB_USER", "app_user");
     }
 
-    /** Lit le mot de passe MariaDB, obligatoire pour ouvrir une connexion. */
+    /** Lit le mot de passe MariaDB depuis les paramètres externes ou le coffre système. */
     static String databasePassword() {
-        return required("app.db.password", "DB_PASSWORD");
+        return secret("app.db.password", "DB_PASSWORD", CredentialVault.databaseAccount());
     }
 
     /**
-     * Lit un paramètre obligatoire sans jamais inventer une valeur de repli.
-     * Une erreur explicite est préférable à une tentative de connexion mal configurée.
+     * Résout un secret : propriété Java, variable d'environnement, puis coffre natif.
+     * Le secret n'est jamais inclus dans le code ni dans l'installateur.
      */
-    private static String required(String property, String environmentVariable) {
+    private static String secret(String property, String environmentVariable, String account) {
         String configured = System.getProperty(property);
         if (configured == null || configured.isBlank()) {
             configured = System.getenv(environmentVariable);
         }
+        return configured == null || configured.isBlank() ? CredentialVault.get(account) : configured;
+    }
+
+    /** Indique si les deux secrets sont déjà fournis par propriétés Java ou variables d'environnement. */
+    static boolean hasExternalCredentials() {
+        return hasExternalValue("app.ldap.bind-password", "LDAP_BIND_PASSWORD")
+                && hasExternalValue("app.db.password", "DB_PASSWORD");
+    }
+
+    private static boolean hasExternalValue(String property, String environmentVariable) {
+        String configured = System.getProperty(property);
         if (configured == null || configured.isBlank()) {
-            throw new IllegalStateException("Configurez la propriété " + property
-                    + " ou la variable " + environmentVariable + ".");
+            configured = System.getenv(environmentVariable);
         }
-        return configured;
+        return configured != null && !configured.isBlank();
     }
 
     /**

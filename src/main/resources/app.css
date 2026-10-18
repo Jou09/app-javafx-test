@@ -27,6 +27,10 @@
     -fx-effect: dropshadow(gaussian, rgba(30, 39, 97, 0.12), 28, 0.16, 0, 8);
 }
 
+.login-card .text-field {
+    -fx-padding: 9px 11px;
+}
+
 /* Marque et textes de l'écran d'authentification. */
 .brand-mark {
     -fx-alignment: center;
